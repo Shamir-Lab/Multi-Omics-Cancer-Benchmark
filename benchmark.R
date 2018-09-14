@@ -59,7 +59,7 @@ print.matrix.latex.format <- function(mat) {
 
 
 perform.all.analyses <- function(benchmark.ret) {
-
+  par(mar=rep(1, 4))
   for (i in 1:4) {
     
     cur.func = list(benchmark.omics.time, benchmark.omics.num.clusters,
@@ -83,14 +83,13 @@ perform.all.analyses <- function(benchmark.ret) {
     print('------------------------')
   }
   
-  
   # plots that include all datasets
   for (i in 1:4) {
     omic.subset = names(OMIC.SUBSETS)[[i]]
     benchmark.surv = benchmark.omics.surv(benchmark.ret, omic.subset)
     benchmark.clinical = benchmark.omics.clinical(benchmark.ret, omic.subset)
-    plot.name = list('multi_omics_surv_clinical.png', 'exp_surv_clinical.png', 
-      'methy_surv_clinical.png', 'mirna_surv_clinical.png')[[i]]
+    plot.name = list('multi_omics_surv_clinical.tiff', 'exp_surv_clinical.tiff', 
+      'methy_surv_clinical.tiff', 'mirna_surv_clinical.tiff')[[i]]
     create.clinical.survival.plots(benchmark.surv, benchmark.clinical, plot.name)
   }
   
@@ -122,7 +121,7 @@ get.best.single.omic.mat <- function(single.omic.list1, single.omic.list2) {
 }
 
 create.mean.clinical.survival.plot <- function(benchmark.ret) {
-  png(file.path(get.plots.dir.path(), 'mean_surv_clinical.png'), width=1500, height=750)
+  tiff(file.path(get.plots.dir.path(), 'mean_surv_clinical.tiff'), width=4500, height=2250, res=300)
   layout(matrix(c(1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5), nrow=2, byrow=T))
   single.omic.surv.benchmarks = list()
   single.omic.clin.benchmarks = list()
@@ -189,12 +188,11 @@ create.mean.clinical.survival.plot <- function(benchmark.ret) {
 
 create.clinical.survival.plots <- function(benchmark.surv, benchmark.clinical, plot.name) {
   num.subtypes = ncol(benchmark.surv)
-  
-  png(file.path(get.plots.dir.path(), plot.name), width=1200)
+  tiff(file.path(get.plots.dir.path(), plot.name), width=4500, height=1875, res=300)
   alg.cols = c("#8DD3C7", "#BEBADA", "#FB8072", "#80B1D3", "#FDB462", "#B3DE69", "#FCCDE5", "#BC80BD", "#842121")
   pch = c(rep(15, 3), rep(3, 3), rep(19, 3))
 
-  par(mfrow=c(2, num.subtypes / 2)) 
+  par(mfrow=c(2, num.subtypes / 2), mar=c(4.1, 4, 3.2, 1))
   for (i in 1:num.subtypes) {
     subtype = colnames(benchmark.surv)[i]
     subtype.surv = benchmark.surv[,subtype]
@@ -217,7 +215,7 @@ create.clinical.survival.plots <- function(benchmark.surv, benchmark.clinical, p
     }
     
     plot(subtype.surv, subtype.clinical, main=subtype.to.display.name(subtype), xlab=xlab, ylab=ylab,
-         xlim=c(0, max(subtype.surv, surv.significance) + 0.2), ylim=c(0, max(subtype.clinical + 1)), col=current.cols, pch=pch, cex.lab=1.8, cex=3, cex.axis=1.5, cex.main=2, lwd=3)
+         xlim=c(0, max(subtype.surv, surv.significance) + 0.2), ylim=c(0, max(subtype.clinical + 1)), col=current.cols, pch=current.pch, cex.lab=1.4, cex=2.4, cex.axis=1.5, cex.main=1.8, lwd=3)
     abline(v=surv.significance, col='red')
   }
   
@@ -227,18 +225,25 @@ create.clinical.survival.plots <- function(benchmark.surv, benchmark.clinical, p
 plot.legend <- function() {
   alg.cols = c("#8DD3C7", "#BEBADA", "#FB8072", "#80B1D3", "#FDB462", "#B3DE69", "#FCCDE5", "#BC80BD", "#842121")
   pch = c(rep(15, 3), rep(3, 3), rep(19, 3))
+  lwds = c(rep(NA, 3), rep(3, 3), rep(NA, 3))
+  pt.cexs = 1.8
   algorithm.names = ALGORITHM.DISPLAY.NAMES
+  algorithm.names[length(algorithm.names)] = paste0(algorithm.names[length(algorithm.names)], ' ')
+  width=4200
   
-  if (T) {
+  if (F) {
     alg.cols = alg.cols[-7]
     pch = pch[-7]
+    lwds = lwds[-7]
     algorithm.names = algorithm.names[-7]
+    pt.cexs = pt.cexs[-7]
+    width=3800
   }
   
-  png(file.path(get.plots.dir.path(), 'legend2.png'), width=2000, height=400)
-  par(font=2)
+  tiff(file.path(get.plots.dir.path(), 'legend.tif'), width=width, res=300)
+  par(font=2, mar=rep(1, 4))
   plot(0,xaxt='n',yaxt='n',bty='n',pch='',ylab='',xlab='')
-  legend(0.7, 1, legend=algorithm.names, col=alg.cols, pch=pch, horiz=T, pt.cex=1.8, cex=1.2, bty='n')
+  legend(0.58, 1, legend=algorithm.names, col=alg.cols, pch=pch, horiz=T, pt.cex=pt.cexs, pt.lwd=lwds)
   dev.off()
 }
 
@@ -335,7 +340,7 @@ get.empirical.surv <- function(clustering, subtype) {
     sig.threshold = 0.05
     is.conf.small = ((cur.conf.int[2] - cur.pvalue) < min(cur.pvalue / 10, 0.01)) & ((cur.pvalue - cur.conf.int[1]) < min(cur.pvalue / 10, 0.01))
     is.threshold.in.conf = cur.conf.int[1] < sig.threshold & cur.conf.int[2] > sig.threshold
-    if (is.conf.small & !is.threshold.in.conf) {
+    if ((is.conf.small & !is.threshold.in.conf) | (total.num.perms > 2e7)) {
     #if (is.conf.small) {
       should.continue = F
     } else {
@@ -615,7 +620,7 @@ get.elbow <- function(values, is.max) {
 # Does not support a single omic dataset
 run.mcca <- function(omics.list, subtype.data) {
   if (length(omics.list) == 1) {
-    return(list(clustering=rep(1, ncol(omics.list[[1]])), timing=1))
+    return(list(clustering=rep(NA, ncol(omics.list[[1]])), timing=1))
   }
   start = Sys.time()
   omics.list = log.and.normalize(omics.list, subtype.data, 
@@ -637,7 +642,7 @@ run.mcca <- function(omics.list, subtype.data) {
   sils = c()
   clustering.per.num.clusters = list()
   for (num.clusters in 2:MAX.NUM.CLUSTERS) {
-    cur.clustering = kmeans(sample.rep, num.clusters)$cluster  
+    cur.clustering = kmeans(sample.rep, num.clusters, iter.max=100, nstart=30)$cluster  
     sil = get.clustering.silhouette(list(t(sample.rep)), cur.clustering)
     sils = c(sils, sil)
     clustering.per.num.clusters[[num.clusters - 1]] = cur.clustering
@@ -823,7 +828,7 @@ run.lracluster <- function(omics.list, subtype.data) {
   clustering.per.num.clusters = list()
   for (num.clusters in 2:MAX.NUM.CLUSTERS) {
     print(paste('running kmeans in lra cluster for num clusters', num.clusters))
-    cur.clustering = kmeans(t(solution), num.clusters)$cluster
+    cur.clustering = kmeans(t(solution), num.clusters, iter.max=100, nstart=60)$cluster
     sil = get.clustering.silhouette(list(solution), cur.clustering)
     sils = c(sils, sil)
     clustering.per.num.clusters[[num.clusters - 1]] = cur.clustering
@@ -845,7 +850,7 @@ run.kmeans <- function(omics.list, subtype.data) {
   k.range = 1:MAX.NUM.CLUSTERS
   for (k in k.range) {
     concat.omics = do.call(rbind, omics.list)
-    kmeans.ret = kmeans(t(concat.omics), k)
+    kmeans.ret = kmeans(t(concat.omics), k, iter.max=100, nstart=60)
     all.withinss = c(all.withinss, kmeans.ret$tot.withinss)
     all.clusterings[[k]] = kmeans.ret$cluster
   }
@@ -980,6 +985,8 @@ check.survival <- function(groups, subtype, survival.file.path) {
   indices = match(patient.names, patient.names.in.file)
   ordered.survival.data = survival.data[indices,]
   ordered.survival.data["cluster"] <- groups
+  ordered.survival.data$Survival[is.na(ordered.survival.data$Survival)] = 0
+  ordered.survival.data$Death[is.na(ordered.survival.data$Death)] = 0
   return(survdiff(Surv(Survival, Death) ~ cluster, data=ordered.survival.data))
   
 }
@@ -1122,7 +1129,7 @@ get.empirical.clinical <- function(clustering, clinical.values, is.chisq) {
     
     sig.threshold = 0.05
     is.threshold.in.conf = cur.conf.int[1] < sig.threshold & cur.conf.int[2] > sig.threshold
-    if (!is.threshold.in.conf) {
+    if (!is.threshold.in.conf | total.num.iters > 1e5) {
       should.continue = F
     }
   }
