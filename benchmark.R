@@ -647,6 +647,8 @@ run.mcca <- function(omics.list, subtype.data) {
     sils = c(sils, sil)
     clustering.per.num.clusters[[num.clusters - 1]] = cur.clustering
   }
+  # NOTE: the next line contains an error. We mistakenly selected the minimal rather maximal silhouette.
+  # See more details in: http://acgt.cs.tau.ac.il/multi_omic_benchmark/download.html.
   cca.clustering = clustering.per.num.clusters[[which.min(sils)]]
   time.taken = as.numeric(Sys.time() - start, units='secs')
   return(list(clustering=cca.clustering, timing=time.taken))
@@ -834,6 +836,8 @@ run.lracluster <- function(omics.list, subtype.data) {
     clustering.per.num.clusters[[num.clusters - 1]] = cur.clustering
   }
   print(sils)
+  # NOTE: the next line contains an error. We mistakenly selected the minimal rather maximal silhouette.
+  # See more details in: http://acgt.cs.tau.ac.il/multi_omic_benchmark/download.html.
   chosen.clustering = clustering.per.num.clusters[[which.min(sils)]]
   time.taken = as.numeric(Sys.time() - start, units='secs')
   return(list(clustering=chosen.clustering, timing=time.taken))
