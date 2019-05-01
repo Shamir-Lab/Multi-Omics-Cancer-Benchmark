@@ -8,3 +8,5 @@ To run the benchmark, some configuration is needed, mainly settings paths to the
 The expected directory structure is: for the clinical data, a single directory with all clinical data files.
 The datasets and survival data are organized as follows: a single root directory, with subdirectories for every cancer type. The directory for each cancer type contains a file for every omic, and a file called "survival" with survival data.
 Omic files, survival data files and clinical label files should be formatted as the files in http://acgt.cs.tau.ac.il/multi_omic_benchmark/download.html.
+
+NOTE: we discovered an error we made in the benchmark's code, where our choice of the number of clusters used by MCCA and LRACluster was not the one suggested by the authors. After changing the criterion to choose the number of clusters, the performance of both methods became worse. We therefore kept our version to choose the number of clusters. See a more detailed explanation in http://acgt.cs.tau.ac.il/multi_omic_benchmark/silhouette_error.html. 
