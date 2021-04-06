@@ -44,9 +44,9 @@ set.omics.list.attr <- function(subtype.raw.data, subtype.data) {
   return(subtype.raw.data)
 }
 
-ALGORITHM.NAMES = c('kmeans', 'spectral', 'lracluster', 'pins', 'snf', 'mkl', 
+ALGORITHM.NAMES = c('hclust', 'kmeans', 'spectral', 'lracluster', 'pins', 'snf', 'mkl', 
                      'mcca', 'nmf', 'iCluster')
-ALGORITHM.DISPLAY.NAMES = as.list(c('K-means', 'Spectral', 'LRAcluster', 'PINS', 
+ALGORITHM.DISPLAY.NAMES = as.list(c('H-Clust', 'K-means', 'Spectral', 'LRAcluster', 'PINS', 
                            'SNF', 'rMKL-LPP', 'MCCA', 'MultiNMF', 'iClusterBayes'))
 names(ALGORITHM.DISPLAY.NAMES) = ALGORITHM.NAMES
 			
@@ -843,6 +843,242 @@ run.lracluster <- function(omics.list, subtype.data) {
   return(list(clustering=chosen.clustering, timing=time.taken))
 }
 
+compRmat <- function(MAT,n){
+
+  n = length(MAT)
+  m = dim(MAT[[1]])[1]
+  I = diag(m)
+
+  RP = I
+
+  for (ep in 1:n) {
+
+    A = MAT[[ep]]
+
+    num_pat = dim(A)[2]
+    R = matrix(0, nrow = num_pat, ncol = num_pat)
+
+    for (i in 1:num_pat) {
+
+      for (j in 1:num_pat) {
+
+        R[i,j] = max( apply( rbind(RP[i,], t(A[,j])), 2, min) )
+
+      }
+    }
+
+    for (i in 1:num_pat) {
+
+      for (j in 1:num_pat) {
+
+        R[i,j] = max( R[i,j], RP[i,j])
+
+      }
+    }
+    RP = R
+
+  }
+  c = 1
+  RC = c()
+
+  for (i in 1:num_pat-1) {
+    for (j in (i+1):num_pat) {
+
+      RC = c(RC,RP[i,j])
+
+      c = c + 1
+
+    }
+  }
+
+  # print(sum(RC))
+  # write.table(RC, file="RCmat.txt", row.names=FALSE, col.names=FALSE)
+  d = (1 - RC)/sqrt(sum((1 - RC)^2))
+  # write.table(d, file="vecD.txt", row.names=FALSE, col.names=FALSE)
+
+  #convert vector to upper matrix
+  D = matrix(0, nrow=num_pat, ncol=num_pat)
+  D[lower.tri(D, diag=FALSE)] = d
+
+  #make D lower matrix a symmetric matrix
+  D[upper.tri(D)] = t(D)[upper.tri(D)]
+
+  # if(!file.exists('/home/davidenardone/MOCB/Dmat.Rdata')) {
+  #   save(D, file="Dmat.Rdata")
+  # }
+
+  return (list(Rmat=R, Dmat=D))
+
+}
+
+comp_R <- function(A){
+
+  n = nrow(A)
+  m = ncol(A)
+  fl = 1
+
+  R = A
+
+  RP = A
+
+  while(fl==1){
+
+    for (i in 1:m) {
+      for (j in 1:m) {
+
+        R[i,j] = max(apply(rbind(R[i,], t(A[,j])), 2, min))
+
+      }
+    }
+
+    for (i in 1:m) {
+      for (j in 1:m) {
+
+        R[i,j] = max( R[i,j],RP[i,j] )
+
+      }
+    }
+
+    cond = sum(apply( RP - R, 2, sum))
+    if( cond == 0  || is.na(cond) == TRUE) {
+      fl = 0;
+    }
+
+    RP = R;
+
+  }
+
+  return (R)
+}
+
+L_sim <- function(x, y, p){
+
+  m = length(x)
+  a = apply(rbind( ((1-x^p) + y^p )^(1/p), rep(1,m) ), 2, min)
+  b = apply(rbind( ((1-y^p) + x^p )^(1/p), rep(1,m) ), 2, min)
+
+  u = (1/m)*sum(apply(rbind(a,b),2,min))
+
+  return (u)
+}
+
+run.DimensionReduction <- function(matrix, label, method) {
+
+  x = matrix(unlist(matrix), ncol=ncol(matrix), nrow=nrow(matrix))
+
+  rf = randomForest(x, importance=T)
+  importance = importance(rf)
+
+  gini = as.numeric(importance[,4])
+  gini_ind = which(gini>0)
+  gini_2 = gini[gini_ind]
+
+  d = data.frame(as.numeric(gini_ind),as.numeric(gini_2))
+  ind = d[order(d[,2],decreasing=TRUE),][,1] #we take all feature with MeanDecreaseGini != 0
+
+  mat_out = matrix[,ind]
+
+  return (mat_out)
+}
+
+
+FSBMV.hclust <- function(omics.list, survival, n, p, verbose = TRUE){
+
+  step = 0
+  k <- length(omics.list)
+
+  Cd <- list()
+  for (i in 1:k) {
+
+    print(paste('Computing', paste0(i, '/', k),'matrix...' ))
+    mat = matrix(0L, nrow = n, ncol = n)
+
+    #FEATURE SELECTION STEP
+    #transpose matrix i-th omic (#patients,#feats)
+    curr.omics = t(as.matrix(omics.list[[i]])) #i-th omic
+    curr.omics = run.DimensionReduction(curr.omics, survival) 
+      
+    for (mod_1 in 1:(n-1)) {
+
+      for (mod_2 in ((mod_1+1):n)) {
+
+        mat[mod_1,mod_2] = L_sim(curr.omics[mod_1, ], curr.omics[mod_2, ], p)
+        mat[mod_2,mod_1] = mat[mod_1,mod_2];
+      }
+
+      step = step + 1
+      if(verbose == TRUE && step == 30){
+
+        print(paste('patient', paste0(mod_1, '/', n)))
+        step = 0 
+      }
+    }
+
+    Cd[[i]] = comp_R(mat);
+    print('Done computing!')
+  }
+  DR_mat = compRmat(Cd)
+
+  return(list(D=DR_mat$D,Cons=Cd))
+}
+
+run.hclust <- function(omics.list, subtype.data, subtype, omic_type) {
+
+  n = length(omics.list[[1]]) #number of patients
+  p_norm = 1
+  start = Sys.time()
+
+  omics.list = log.and.normalize(omics.list, subtype.data, filter.var = T)
+
+  patients = colnames(omics.list[[1]])
+  survival = get.survival(patients, subtype)
+  survival = survival[[2]]
+
+  h_clust_dir = 'RESULTS_DIR_PATH/hclust'
+  sub_dir = file.path(h_clust_dir, subtype, paste0(omic_type) )
+
+  print('Computing FSBMV...')
+  FSBMV <- FSBMV.hclust(omics.list, survival, n, p_norm)
+  D = FSBMV$D
+
+  #adding label to matrix (because D is squared (170,170))
+  rownames(D) = colnames(omics.list[[1]]) #patients
+  colnames(D) = colnames(omics.list[[1]]) #patients
+  D = as.dist(D, diag=TRUE)
+
+  # computing dendogram for i-th omic
+  hc = hclust(D, method = 'ward.D2')
+
+  # determining best k
+  concat.omics = do.call(rbind, omics.list)
+  # save(concat.omics, file=file.path(sub_dir, 'omics.RData'))
+  wss <- fviz_nbclust(t(concat.omics), hcut, method = "wss", diss=D, k.max=MAX.NUM.CLUSTERS)
+  best.k = get.elbow(wss$data$y, is.max=T)
+  basic_wss <- fviz_nbclust(t(concat.omics), hcut, method = "wss", k.max=MAX.NUM.CLUSTERS)
+  best.k2 = get.elbow(basic_wss$data$y, is.max=T)
+
+  # assigning patients to clusters
+  clustering <- cutree(hc, best.k)
+
+  time.taken = as.numeric(Sys.time() - start, units='secs')  
+
+  # saving dendogram and elbow for i-th omic
+  jpeg(file.path(h_clust_dir,  'dendogram.jpg'))
+  plot(hc, labels = FALSE)
+  dev.off()
+
+  jpeg(file.path(h_clust_dir, paste0(best.k2,'_basic_elbow.jpeg')))
+  plot(basic_wss)
+  dev.off()
+
+  jpeg(file.path(h_clust_dir, paste0(best.k,'_elbow.jpeg')))
+  plot(wss)
+
+  dev.off()
+
+  return(list(clustering=clustering, timing=time.taken))
+}
+
 run.kmeans <- function(omics.list, subtype.data) {
   start = Sys.time()
   omics.list = log.and.normalize(omics.list, subtype.data, 
@@ -895,6 +1131,12 @@ load.libraries <- function() {
   # bioconductor packages
   source("https://bioconductor.org/biocLite.R")
   biocLite("impute")
+  library('NbClust')
+  library('FactoMineR')
+  library('factoextra')
+  library('cluster')
+  library('glmnet')
+  library('randomForest')
   #biocLite("iClusterPlus")
 }
 
